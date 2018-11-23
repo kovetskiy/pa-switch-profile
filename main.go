@@ -19,6 +19,7 @@ Usage:
   pa-switch-profile --version
 
 Options:
+  <card>     Index of card or 'active' to find active.
   -h --help  Show this screen.
   --version  Show version.
 `
@@ -57,6 +58,9 @@ func switchProfile(
 	var next string
 	for _, profile := range profiles {
 		if !afterActive {
+			if card.ActiveProfile == nil {
+				panic("card without active profile specified")
+			}
 			if card.ActiveProfile.Name == profile {
 				afterActive = true
 			}
@@ -90,16 +94,29 @@ func getCard(client *pulseaudio.Client, query string) (*pulseaudio.Card, error) 
 	}
 
 	var targetCard pulseaudio.Card
+	var found bool
 	for _, card := range cards {
 		if card.Name == query {
 			targetCard = card
+			found = true
 			break
 		}
 
 		if fmt.Sprint(card.Index) == query {
 			targetCard = card
+			found = true
 			break
 		}
+
+		if query == "active" && card.ActiveProfile != nil {
+			targetCard = card
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("unable to find card: %q", query)
 	}
 
 	return &targetCard, nil
