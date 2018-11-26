@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/pulseaudio"
@@ -14,14 +15,15 @@ var (
 	usage   = "pa-switch-profile " + version + `
 
 Usage:
-  pa-switch-profile [options] <card> <profile>...
+  pa-switch-profile [options] <card> <profile>... [-i <match>]...
   pa-switch-profile -h | --help
   pa-switch-profile --version
 
 Options:
-  <card>     Index of card or 'active' to find active.
-  -h --help  Show this screen.
-  --version  Show version.
+  <card>               Index of card or 'active' to find active.
+  -i --ignore <match>  Ignore specified card.
+  -h --help            Show this screen.
+  --version            Show version.
 `
 )
 
@@ -38,7 +40,11 @@ func main() {
 
 	defer client.Close()
 
-	card, err := getCard(client, args["<card>"].(string))
+	card, err := getCard(
+		client,
+		args["<card>"].(string),
+		args["--ignore"].([]string),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -87,7 +93,11 @@ func switchProfile(
 	return nil
 }
 
-func getCard(client *pulseaudio.Client, query string) (*pulseaudio.Card, error) {
+func getCard(
+	client *pulseaudio.Client,
+	query string,
+	ignores []string,
+) (*pulseaudio.Card, error) {
 	cards, err := client.Cards()
 	if err != nil {
 		log.Fatalln(err)
@@ -97,21 +107,32 @@ func getCard(client *pulseaudio.Client, query string) (*pulseaudio.Card, error) 
 	var found bool
 	for _, card := range cards {
 		if card.Name == query {
-			targetCard = card
 			found = true
-			break
 		}
 
 		if fmt.Sprint(card.Index) == query {
-			targetCard = card
 			found = true
-			break
 		}
 
 		if query == "active" && card.ActiveProfile != nil {
-			targetCard = card
 			found = true
-			break
+		}
+
+		if found {
+			for _, match := range ignores {
+				ok, err := regexp.MatchString(match, card.Name)
+				if err != nil {
+					log.Printf("unable to match by pattern: %q: %v", err)
+				}
+
+				if ok {
+					found = false
+				}
+			}
+		}
+
+		if found {
+			targetCard = card
 		}
 	}
 
