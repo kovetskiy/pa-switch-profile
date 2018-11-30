@@ -40,16 +40,19 @@ func main() {
 
 	defer client.Close()
 
+	profiles := args["<profile>"].([]string)
+
 	card, err := getCard(
 		client,
 		args["<card>"].(string),
 		args["--ignore"].([]string),
+		profiles,
 	)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	err = switchProfile(client, card, args["<profile>"].([]string))
+	err = switchProfile(client, card, profiles)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -97,6 +100,7 @@ func getCard(
 	client *pulseaudio.Client,
 	query string,
 	ignores []string,
+	profiles []string,
 ) (*pulseaudio.Card, error) {
 	cards, err := client.Cards()
 	if err != nil {
@@ -133,6 +137,24 @@ func getCard(
 
 		if found {
 			targetCard = card
+		}
+
+		for _, required := range profiles {
+			requiredFound := false
+			for profile, _ := range card.Profiles {
+				if profile == required {
+					requiredFound = true
+					break
+				}
+			}
+
+			if !requiredFound {
+				found = false
+			}
+		}
+
+		if found {
+			break
 		}
 	}
 
